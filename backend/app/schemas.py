@@ -96,10 +96,9 @@ class TripResponse(TripBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ==========================================
 # PICK-UP POINT SCHEMAS
-# Based on PPTX: Requests to edit a route with a radius limitation.
-# ==========================================
+#  Requests to edit a route with a radius limitation.
+
 
 class PickUpPointBase(BaseModel):
     trip_id: UUID
