@@ -1,119 +1,115 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from enum import Enum
 from datetime import datetime
-from uuid import UUID
+from typing import Optional, List
 
-
-# ENUMS
+class UserRole(str, Enum):
+    PASSENGER = "Passenger"
+    SHUTTLE_OWNER = "ShuttleOwner"
+    ADMIN = "Admin"
 
 class GenderEnum(str, Enum):
     MALE = "Male"
     FEMALE = "Female"
     OTHER = "Other"
 
-class TripStatusEnum(str, Enum):
-    SCHEDULED = "Scheduled"
+class PaymentMethod(str, Enum):
+    CASH = "Cash"
+    CARD = "Card"
+
+class TripStatus(str, Enum):
+    PENDING = "Pending"
     IN_PROGRESS = "In Progress"
     COMPLETED = "Completed"
     CANCELLED = "Cancelled"
 
-
-# PASSENGER SCHEMAS
-
 class PassengerBase(BaseModel):
-    full_name: str = Field(..., description="Passenger's full legal name")
+    full_name: str = Field(..., description="Full Name of the passenger")
     gender: GenderEnum
-    id_number: str = Field(..., description="National ID or Passport Number")
-    age: int = Field(..., gt=0, description="Passenger's age")
+    id_number: str = Field(..., description="Passenger ID Number")
+    age: int = Field(..., description="Age of the passenger")
     email: EmailStr
     phone_number: str
+    parent_id: Optional[str] = Field(default=None, description="Required if age < 18")
+    is_verified: bool = Field(default=False, description="Verified via SMS/Email")
 
 class PassengerCreate(PassengerBase):
-    password: str = Field(..., min_length=8, max_length=15)
+    password: str
 
 class PassengerResponse(PassengerBase):
-    id: UUID
-    created_at: datetime
-    
-    # ConfigDict(from_attributes=True) allows Pydantic to read data from ORM models (like SQLAlchemy)
+    id: str
     model_config = ConfigDict(from_attributes=True)
 
-
-
-# SHUTTLE OWNER SCHEMAS
-# System serves both passengers & owners
-
+class VehicleDetails(BaseModel):
+    make_model: str
+    capacity: int = Field(..., description="Number of seats")
+    has_trailer: bool = Field(default=False, description="Must be true if capacity == 7")
+    drivers_license_url: str
+    pdp_document_url: str
+    dekra_report_url: str
+    vehicle_photos_urls: List[str]
 
 class ShuttleOwnerBase(BaseModel):
     full_name: str
     email: EmailStr
     phone_number: str
-    business_name: Optional[str] = None
+    vehicle: VehicleDetails
+    is_approved_by_admin: bool = False
 
 class ShuttleOwnerCreate(ShuttleOwnerBase):
-    password: str = Field(..., min_length=8, max_length=15)
+    password: str
 
 class ShuttleOwnerResponse(ShuttleOwnerBase):
-    id: UUID
-    created_at: datetime
-    
+    id: str
     model_config = ConfigDict(from_attributes=True)
 
-
-# ROUTE SCHEMAS
-# Exists independent of trips. Has Point A & Point B.
-
 class RouteBase(BaseModel):
-    name: str = Field(..., description="e.g., Pretoria to Johannesburg")
-    point_a_start: str = Field(..., description="Starting location/coordinate")
-    point_b_end: str = Field(..., description="Ending location/coordinate")
-    distance_km: Optional[float] = None
+    name: str
+    point_a_start: str
+    point_b_end: str
+    base_distance_km: float
 
 class RouteCreate(RouteBase):
     pass
 
 class RouteResponse(RouteBase):
-    id: UUID
+    id: str
     model_config = ConfigDict(from_attributes=True)
 
-
-# TRIP SCHEMAS
-# A trip uses a single route. 
-
-
 class TripBase(BaseModel):
-    route_id: UUID
-    shuttle_id: UUID  # Reference to the specific vehicle/taxi used
+    route_id: str
+    driver_id: str
     departure_time: datetime
-    status: TripStatusEnum = TripStatusEnum.SCHEDULED
+    status: TripStatus = TripStatus.PENDING
 
 class TripCreate(TripBase):
     pass
 
 class TripResponse(TripBase):
-    id: UUID
+    id: str
+    passenger_id: str
     model_config = ConfigDict(from_attributes=True)
 
-
-# PICK-UP POINT SCHEMAS
-#  Requests to edit a route with a radius limitation.
-
-
 class PickUpPointBase(BaseModel):
-    trip_id: UUID
-    passenger_id: UUID
-    location_name: str = Field(..., description="e.g., James, Lethabo, Lerutle")
+    trip_id: str
+    location_name: str
     latitude: float
     longitude: float
-    radius_meters: float = Field(..., description="Radius such that the location does not affect the route heavily")
-    is_within_radius: bool = Field(default=True, description="Flag indicating if the point lies outside the allowed radius (like 'Tau' in PPTX)")
+    radius: float
 
 class PickUpPointCreate(PickUpPointBase):
     pass
 
-class PickUpPointResponse(PickUpPointBase):
-    id: UUID
-    request_time: datetime
-    
-    model_config = ConfigDict(from_attributes=True)
+class FareCalculationRequest(BaseModel):
+    route_id: str
+    trip_time: datetime
+    passengers_count: int
+    tolls_estimated: float
+
+class FareResponse(BaseModel):
+    base_fare: float
+    tolls: float
+    commission: float
+    total_cost: float
+    cost_per_passenger: float
+    strategy_applied: str
